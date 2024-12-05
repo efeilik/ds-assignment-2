@@ -62,6 +62,16 @@ export class EDAAppStack extends cdk.Stack {
       },
     });
 
+    const updateTableFn = new lambdanode.NodejsFunction(this, "UpdateTableFn", {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      entry: `${__dirname}/../lambdas/updateTable.ts`,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 128,
+      environment: {
+        TABLE_NAME: imageTable.tableName,
+      },
+    });
+
     const confirmationMailerFn = new lambdanode.NodejsFunction(
       this,
       "ConfirmationMailerFn",
@@ -91,12 +101,35 @@ export class EDAAppStack extends cdk.Stack {
       new s3n.SnsDestination(newImageTopic)  // Changed
     );
 
+   
     // Subscriptions
     newImageTopic.addSubscription(
-      new subs.SqsSubscription(imageProcessQueue)
+      new subs.SqsSubscription(imageProcessQueue, {
+        filterPolicy: {
+          metadata_type: sns.SubscriptionFilter.stringFilter({
+            allowlist: ["Caption", "Date", "Photographer"],
+          }),
+        },
+      })
     );
 
-    newImageTopic.addSubscription(new subs.LambdaSubscription(confirmationMailerFn));
+    newImageTopic.addSubscription(new subs.LambdaSubscription(confirmationMailerFn, {
+      filterPolicy: {
+        metadata_type: sns.SubscriptionFilter.stringFilter({
+          allowlist: ["Caption", "Date", "Photographer"],
+        }),
+      },
+    }));
+
+    newImageTopic.addSubscription(
+      new subs.LambdaSubscription(updateTableFn, {
+        filterPolicy: {
+          metadata_type: sns.SubscriptionFilter.stringFilter({
+            allowlist: ["Caption", "Date", "Photographer"],
+          }),
+        },
+      })
+    );
 
     // SQS --> Lambda
     const newImageEventSource = new events.SqsEventSource(imageProcessQueue, {
@@ -114,6 +147,7 @@ export class EDAAppStack extends cdk.Stack {
     // Permissions
     imagesBucket.grantRead(logImageFn);
     imageTable.grantWriteData(logImageFn);
+    imageTable.grantWriteData(updateTableFn);
 
     confirmationMailerFn.addToRolePolicy(
       new iam.PolicyStatement({
@@ -141,6 +175,9 @@ export class EDAAppStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "bucketName", {
       value: imagesBucket.bucketName,
+    });
+    new cdk.CfnOutput(this, "topicARN", {
+      value: newImageTopic.topicArn,
     });
   }
 }
