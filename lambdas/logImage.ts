@@ -1,7 +1,7 @@
 import { SQSHandler } from "aws-lambda";
 import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
 
-const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || "us-east-1" });
+const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || "eu-west-1" });
 
 export const handler: SQSHandler = async (event) => {
     console.log("Event ", JSON.stringify(event));
@@ -18,7 +18,7 @@ export const handler: SQSHandler = async (event) => {
             throw new Error("Invalid file type, please upload .jpeg or .png files");
           }
           const params = {
-            TableName: process.env.IMAGE_TABLE_NAME,
+            TableName: process.env.TABLE_NAME,
             Item: {
               fileName: { S: srcKey },
             },

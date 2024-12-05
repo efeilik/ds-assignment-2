@@ -1,3 +1,3 @@
 export const SES_REGION = 'eu-west-1';
-export const SES_EMAIL_FROM = 'aliefeilik@hotmail.com' ;
-export const SES_EMAIL_TO =  'aliefeilik@hotmail.com';
+export const SES_EMAIL_FROM = '20110806@mail.wit.ie' ;
+export const SES_EMAIL_TO =  '20110806@mail.wit.ie';
