@@ -9,6 +9,9 @@ import * as sns from "aws-cdk-lib/aws-sns";
 import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import { StreamViewType } from "aws-cdk-lib/aws-dynamodb";
+import { DynamoEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
+import { StartingPosition } from "aws-cdk-lib/aws-lambda";
 
 
 import { Construct } from "constructs";
@@ -29,6 +32,7 @@ export class EDAAppStack extends cdk.Stack {
     const imageTable = new dynamodb.Table(this, "ImageTable", {
       partitionKey: { name: "fileName", type: dynamodb.AttributeType.STRING },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+      stream: StreamViewType.NEW_IMAGE,
     });
 
     // Integration infrastructure
@@ -101,25 +105,16 @@ export class EDAAppStack extends cdk.Stack {
       new s3n.SnsDestination(newImageTopic)  // Changed
     );
 
-   
-    // Subscriptions
-    newImageTopic.addSubscription(
-      new subs.SqsSubscription(imageProcessQueue, {
-        filterPolicy: {
-          metadata_type: sns.SubscriptionFilter.stringFilter({
-            allowlist: ["Caption", "Date", "Photographer"],
-          }),
-        },
-      })
+    imagesBucket.addEventNotification(
+      s3.EventType.OBJECT_REMOVED,
+      new s3n.SnsDestination(newImageTopic)
     );
 
-    newImageTopic.addSubscription(new subs.LambdaSubscription(confirmationMailerFn, {
-      filterPolicy: {
-        metadata_type: sns.SubscriptionFilter.stringFilter({
-          allowlist: ["Caption", "Date", "Photographer"],
-        }),
-      },
-    }));
+
+    // Subscriptions
+    newImageTopic.addSubscription(
+      new subs.SqsSubscription(imageProcessQueue)
+    );
 
     newImageTopic.addSubscription(
       new subs.LambdaSubscription(updateTableFn, {
@@ -144,6 +139,11 @@ export class EDAAppStack extends cdk.Stack {
     });
     rejectionMailerFn.addEventSource(rejectionEventSource);
 
+    confirmationMailerFn.addEventSource(
+      new DynamoEventSource(imageTable, {
+        startingPosition: StartingPosition.LATEST,
+      })
+    );
     // Permissions
     imagesBucket.grantRead(logImageFn);
     imageTable.grantWriteData(logImageFn);

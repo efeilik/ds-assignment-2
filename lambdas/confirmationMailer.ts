@@ -1,4 +1,4 @@
-import { SNSHandler, SQSHandler } from "aws-lambda";
+import { DynamoDBStreamHandler } from "aws-lambda";
 import { SES_EMAIL_FROM, SES_EMAIL_TO, SES_REGION } from "../env";
 import {
   SESClient,
@@ -14,34 +14,28 @@ if (!SES_EMAIL_TO || !SES_EMAIL_FROM || !SES_REGION) {
 
 const client = new SESClient({ region: SES_REGION });
 
-export const handler: SNSHandler = async (event: any) => {
-  console.log("SNS Event ", JSON.stringify(event));
+export const handler: DynamoDBStreamHandler = async (event: any) => {
+  console.log("DynamoDB Stream Event ", JSON.stringify(event));
+
   for (const record of event.Records) {
-    console.log("Record Sns: ", record.Sns);
-    const snsRecord = record.Sns;
-    const body = JSON.parse(snsRecord.Message);
-    console.log("Record body ", JSON.stringify(body));
-    const id = body.id;
-    const value = body.value;
-    const metadataType = snsRecord.MessageAttributes.metadata_type.Value;
+    console.log("DynamoDB Stream Event Record: ", JSON.stringify(record));
+    const eventName = record.eventName;
+    const dynamoDBRecord = record.dynamodb;
+    const keys = dynamoDBRecord?.Keys;
+    const fileName = keys.fileName?.S;
 
-    if (!id || !value || !metadataType) {
-      console.error("Invalid format");
-    }
-
-    // Object key may have spaces or unicode non-ASCII characters.
-    const srcKey = decodeURIComponent(id.replace(/\+/g, " "));
+    // Object key may have spaces or unicode non-ASCII characters
+    const srcKey = decodeURIComponent(fileName.replace(/\+/g, " "));
     try {
-      const params = sendEmailParams( srcKey );
+      const params = sendEmailParams(srcKey,eventName);
       await client.send(new SendEmailCommand(params));
     } catch (error: unknown) {
       console.log("ERROR is: ", error);
-      // return;
     }
   }
 };
 
-function sendEmailParams(srcKey: String) {
+function sendEmailParams(srcKey: String, eventName: String) {
   const parameters: SendEmailCommandInput = {
     Destination: {
       ToAddresses: [SES_EMAIL_TO],
@@ -50,12 +44,12 @@ function sendEmailParams(srcKey: String) {
       Body: {
         Html: {
           Charset: "UTF-8",
-          Data: getHtmlContent(srcKey),
+          Data: getHtmlContent(srcKey,eventName),
         },
       },
       Subject: {
         Charset: "UTF-8",
-        Data: `Upload Confirmation`,
+        Data: `${eventName} Confirmation`,
       },
     },
     Source: SES_EMAIL_FROM,
@@ -63,13 +57,12 @@ function sendEmailParams(srcKey: String) {
   return parameters;
 }
 
-function getHtmlContent(srcKey: String) {
+function getHtmlContent(srcKey: String, eventName: String) {
   return `
     <html>
       <body>
-        <h2>Sent from: </h2>
         <ul>
-          <li style="font-size:18px">👤 <b>File path: ${srcKey} received</b></li>
+          <li style="font-size:18px">✉️ <b>${eventName} succesfully done for ${srcKey}</b></li>
         </ul>
       </body>
     </html> 
