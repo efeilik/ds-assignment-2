@@ -113,7 +113,15 @@ export class EDAAppStack extends cdk.Stack {
 
     // Subscriptions
     newImageTopic.addSubscription(
-      new subs.SqsSubscription(imageProcessQueue)
+      new subs.SqsSubscription(imageProcessQueue,{filterPolicyWithMessageBody : {
+        Records: sns.FilterOrPolicy.policy({
+          eventName: sns.FilterOrPolicy.filter(
+            sns.SubscriptionFilter.stringFilter({
+              allowlist: ["ObjectCreated:Put","ObjectRemoved:Delete"],
+            })
+          ),
+        }),
+      }})
     );
 
     newImageTopic.addSubscription(

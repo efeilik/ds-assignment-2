@@ -66,7 +66,6 @@ function getHtmlContent( srcKey : any) {
   return `
     <html>
       <body>
-        <h2>Sent from: </h2>
         <ul>
           <li style="font-size:18px">👤 <b>File path: ${srcKey}</b></li>
         </ul>
